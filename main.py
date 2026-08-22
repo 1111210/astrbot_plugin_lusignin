@@ -206,18 +206,18 @@ class LusigninPlugin(Star):
             cjk_font_path = self._find_cjk_font()
             fallback_font_path = str(BUNDLED_FALLBACK_FONT_PATH)
 
-            title_cjk_font = self._load_font(cjk_font_path, 40)
-            title_fallback_font = self._load_font(fallback_font_path, 40)
-            header_cjk_font = self._load_font(cjk_font_path, 30)
-            header_fallback_font = self._load_font(fallback_font_path, 30)
-            day_cjk_font = self._load_font(cjk_font_path, 30)
-            day_fallback_font = self._load_font(fallback_font_path, 30)
+            title_cjk_font = self._load_font(cjk_font_path, 52)
+            title_fallback_font = self._load_font(fallback_font_path, 52)
+            header_cjk_font = self._load_font(cjk_font_path, 40)
+            header_fallback_font = self._load_font(fallback_font_path, 40)
+            day_cjk_font = self._load_font(cjk_font_path, 44)
+            day_fallback_font = self._load_font(fallback_font_path, 44)
 
-            margin = 36
-            cell_w = 128
-            cell_h = 88
-            title_h = 110
-            header_h = 74
+            margin = 24
+            cell_w = 120
+            cell_h = 84
+            title_h = 96
+            header_h = 66
             max_weeks = 6
 
             width = margin * 2 + cell_w * 7
@@ -249,11 +249,26 @@ class LusigninPlugin(Star):
                 y = margin + title_h + header_h + row * cell_h + cell_h // 2
 
                 date_str = f"{year:04d}-{month:02d}-{day:02d}"
-                self._draw_centered(draw, str(day), x, y, day_cjk_font, day_fallback_font, (30, 30, 30))
-
                 if date_str in signed_dates:
-                    # 在日期右上侧画一个绿色对勾，不依赖字体是否包含 ✓ 字形
-                    self._draw_check(draw, x + 28, y - 18, 20, (76, 175, 80))
+                    # 已签到：用浅绿色背景 + 大对勾作为日期背景
+                    draw.rectangle(
+                        [
+                            x - cell_w // 2 + 6,
+                            y - cell_h // 2 + 6,
+                            x + cell_w // 2 - 6,
+                            y + cell_h // 2 - 6,
+                        ],
+                        fill=(232, 247, 232),
+                    )
+                    self._draw_check_background(
+                        draw,
+                        x,
+                        y,
+                        min(cell_w, cell_h) * 0.66,
+                        (120, 200, 120),
+                    )
+
+                self._draw_centered(draw, str(day), x, y, day_cjk_font, day_fallback_font, (30, 30, 30))
 
             # 保存到系统临时目录，发送后由 AstrBot 清理
             filename = f"astrbot_lusignin_{time.time_ns()}.png"
@@ -370,13 +385,29 @@ class LusigninPlugin(Star):
         )
 
     @staticmethod
-    def _draw_check(draw, x: int, y: int, size: int, fill):
-        """用线段画一个简易对勾。"""
-        mid_x = int(x + size * 0.35)
-        start_y = int(y + size * 0.5)
-        end_y = int(y + size)
-        draw.line([(x, start_y), (mid_x, end_y)], fill=fill, width=3)
-        draw.line([(mid_x, end_y), (int(x + size), y)], fill=fill, width=3)
+    def _draw_check_background(draw, cx: int, cy: int, size: float, fill):
+        """在日期格中央绘制一个较大的对勾，作为签到日期背景。"""
+        size = max(20, int(size))
+        line_width = max(6, int(size * 0.16))
+        x0 = cx - size * 0.5
+        y0 = cy - size * 0.5
+
+        draw.line(
+            [
+                (int(x0 + size * 0.08), int(cy)),
+                (int(x0 + size * 0.38), int(cy + size * 0.34)),
+            ],
+            fill=fill,
+            width=line_width,
+        )
+        draw.line(
+            [
+                (int(x0 + size * 0.38), int(cy + size * 0.34)),
+                (int(x0 + size * 0.94), int(cy - size * 0.30)),
+            ],
+            fill=fill,
+            width=line_width,
+        )
 
     async def terminate(self) -> None:
         logger.info(f"[{PLUGIN_NAME}] 签到插件已卸载")
