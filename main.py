@@ -11,6 +11,7 @@ from __future__ import annotations
 import calendar
 import json
 import os
+import re
 import tempfile
 import threading
 import time
@@ -29,12 +30,16 @@ BUNDLED_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DroidSansFallb
 BUNDLED_FALLBACK_FONT_PATH = Path(__file__).resolve().parent / "assets" / "FreeSans.otf"
 DATE_BG_NORMAL_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_normal.png"
 DATE_BG_SIGNED_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_signed.png"
+DATE_BG_MAKEUP_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_makeup.png"
 
 TZ_BEIJING = timezone(timedelta(hours=8))
 
 DEFAULT_KEYWORDS = ["签到", "打卡"]
 DEFAULT_SUCCESS_MESSAGE = "{{user}} 签到成功！你本月已经签到 {{times}} 次。"
 DEFAULT_DUPLICATE_MESSAGE = "{{user}} 今天已经签过到啦（重复签到）！你本月已经签到 {{times}} 次。"
+DEFAULT_MAKEUP_SUCCESS_MESSAGE = "{{user}} 补签成功！已补签 {{date}}。你本月已经签到 {{times}} 次。"
+DEFAULT_MAKEUP_DUPLICATE_MESSAGE = "{{user}} 今天已经补签过了，不能重复补签。"
+DEFAULT_MAKEUP_FAIL_MESSAGE = "{{user}} 补签失败：{{reason}}"
 
 # 模块级配置缓存。KeywordFilter 在装饰器阶段被实例化，无法直接拿到插件实例，
 # 因此通过这个全局配置在插件 __init__ 时更新，过滤器运行时读取最新关键词。
@@ -42,6 +47,9 @@ _CURRENT_CONFIG: dict[str, Any] = {
     "keywords": DEFAULT_KEYWORDS,
     "success_message": DEFAULT_SUCCESS_MESSAGE,
     "duplicate_message": DEFAULT_DUPLICATE_MESSAGE,
+    "makeup_success_message": DEFAULT_MAKEUP_SUCCESS_MESSAGE,
+    "makeup_duplicate_message": DEFAULT_MAKEUP_DUPLICATE_MESSAGE,
+    "makeup_fail_message": DEFAULT_MAKEUP_FAIL_MESSAGE,
 }
 
 
@@ -81,6 +89,9 @@ class LusigninPlugin(Star):
                 "keywords": DEFAULT_KEYWORDS,
                 "success_message": DEFAULT_SUCCESS_MESSAGE,
                 "duplicate_message": DEFAULT_DUPLICATE_MESSAGE,
+                "makeup_success_message": DEFAULT_MAKEUP_SUCCESS_MESSAGE,
+                "makeup_duplicate_message": DEFAULT_MAKEUP_DUPLICATE_MESSAGE,
+                "makeup_fail_message": DEFAULT_MAKEUP_FAIL_MESSAGE,
             }
         )
         _CURRENT_CONFIG.update(config or {})
@@ -133,10 +144,19 @@ class LusigninPlugin(Star):
     def _ensure_user(self, user_key: str, user_name: str) -> dict[str, Any]:
         user = self.user_data.setdefault(
             user_key,
-            {"name": user_name or "匿名用户", "sign_dates": []},
+            {
+                "name": user_name or "匿名用户",
+                "sign_dates": [],
+                "makeup_dates": [],
+                "last_makeup_date": "",
+            },
         )
         if "sign_dates" not in user or not isinstance(user["sign_dates"], list):
             user["sign_dates"] = []
+        if "makeup_dates" not in user or not isinstance(user["makeup_dates"], list):
+            user["makeup_dates"] = []
+        if "last_makeup_date" not in user:
+            user["last_makeup_date"] = ""
         if "name" not in user:
             user["name"] = user_name or "匿名用户"
         return user
@@ -181,13 +201,164 @@ class LusigninPlugin(Star):
         times = self._month_sign_count(user, year, month)
         text = template.replace("{{user}}", user_name).replace("{{times}}", str(times))
 
-        image_path = self._generate_calendar_image(year, month, user_name, set(user["sign_dates"]))
+        image_path = self._generate_calendar_image(
+            year,
+            month,
+            user_name,
+            set(user["sign_dates"]),
+            set(user.get("makeup_dates", [])),
+        )
         if image_path:
             event.track_temporary_local_file(image_path)
             yield event.make_result().file_image(image_path).message(text).stop_event()
         else:
             # 图片生成失败时至少发送文字提示
             yield event.plain_result(text).stop_event()
+
+    @filter.command("补签")
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def makeup(self, event: AstrMessageEvent, day: int = None):
+        """补签指令：/补签 20，只能补签本月已到达且未签到的日期。"""
+        global _CURRENT_CONFIG
+        _CURRENT_CONFIG.update(self.config)
+
+        user_name = event.get_sender_name() or "匿名用户"
+        user_key = self._get_user_key(event)
+        user = self._ensure_user(user_key, user_name)
+
+        now = datetime.now(TZ_BEIJING)
+        today_str = now.strftime("%Y-%m-%d")
+        year, month, today_day = now.year, now.month, now.day
+
+        # 兼容参数解析失败时手动从消息中提取数字
+        if day is None:
+            match = re.search(r"(?:补签|makeup)\s*(\d{1,2})", event.message_str or "")
+            if match:
+                day = int(match.group(1))
+
+        if day is None:
+            yield event.plain_result(
+                self._format_makeup_message(
+                    _get_message_text("makeup_fail_message", DEFAULT_MAKEUP_FAIL_MESSAGE),
+                    user_name,
+                    reason="请提供补签日期，例如：/补签 20",
+                )
+            )
+            return
+
+        days_in_month = calendar.monthrange(year, month)[1]
+        if day < 1 or day > days_in_month:
+            yield event.plain_result(
+                self._format_makeup_message(
+                    _get_message_text("makeup_fail_message", DEFAULT_MAKEUP_FAIL_MESSAGE),
+                    user_name,
+                    reason=f"补签日期无效，请输入本月 1-{days_in_month} 之间的日期",
+                )
+            )
+            return
+
+        if day > today_day:
+            yield event.plain_result(
+                self._format_makeup_message(
+                    _get_message_text("makeup_fail_message", DEFAULT_MAKEUP_FAIL_MESSAGE),
+                    user_name,
+                    reason="只能补签本月已达到的日期",
+                )
+            )
+            return
+
+        if day == today_day:
+            yield event.plain_result(
+                self._format_makeup_message(
+                    _get_message_text("makeup_fail_message", DEFAULT_MAKEUP_FAIL_MESSAGE),
+                    user_name,
+                    reason="今天已正常签到，无需补签",
+                )
+            )
+            return
+
+        # 规则 1：今天正常签到后方可补签
+        if today_str not in user["sign_dates"]:
+            yield event.plain_result(
+                self._format_makeup_message(
+                    _get_message_text("makeup_fail_message", DEFAULT_MAKEUP_FAIL_MESSAGE),
+                    user_name,
+                    reason="请先完成今日签到后再补签",
+                )
+            )
+            return
+
+        # 规则 2：每天只能补签一次
+        if user.get("last_makeup_date") == today_str:
+            times = self._month_sign_count(user, year, month)
+            yield event.plain_result(
+                self._format_makeup_message(
+                    _get_message_text("makeup_duplicate_message", DEFAULT_MAKEUP_DUPLICATE_MESSAGE),
+                    user_name,
+                    times=times,
+                )
+            )
+            return
+
+        target_str = f"{year:04d}-{month:02d}-{day:02d}"
+        if target_str in user["sign_dates"]:
+            yield event.plain_result(
+                self._format_makeup_message(
+                    _get_message_text("makeup_fail_message", DEFAULT_MAKEUP_FAIL_MESSAGE),
+                    user_name,
+                    reason="该日期已经签到，无需补签",
+                )
+            )
+            return
+
+        # 执行补签
+        user["sign_dates"].append(target_str)
+        user["sign_dates"] = sorted({d for d in user["sign_dates"] if isinstance(d, str)})
+        user["makeup_dates"] = sorted(
+            set(user.get("makeup_dates", [])) | {target_str}
+        )
+        user["last_makeup_date"] = today_str
+        user["name"] = user_name
+        self._save_data()
+
+        times = self._month_sign_count(user, year, month)
+        date_text = f"{month}月{day}日"
+        text = self._format_makeup_message(
+            _get_message_text("makeup_success_message", DEFAULT_MAKEUP_SUCCESS_MESSAGE),
+            user_name,
+            times=times,
+            date_text=date_text,
+        )
+
+        image_path = self._generate_calendar_image(
+            year,
+            month,
+            user_name,
+            set(user["sign_dates"]),
+            set(user.get("makeup_dates", [])),
+        )
+        if image_path:
+            event.track_temporary_local_file(image_path)
+            yield event.make_result().file_image(image_path).message(text).stop_event()
+        else:
+            yield event.plain_result(text).stop_event()
+
+    @staticmethod
+    def _format_makeup_message(
+        template: str,
+        user_name: str,
+        times: int | None = None,
+        date_text: str | None = None,
+        reason: str | None = None,
+    ) -> str:
+        text = template.replace("{{user}}", user_name)
+        if times is not None:
+            text = text.replace("{{times}}", str(times))
+        if date_text is not None:
+            text = text.replace("{{date}}", date_text)
+        if reason is not None:
+            text = text.replace("{{reason}}", reason)
+        return text
 
     # ---------- 月历图片 ----------
 
@@ -197,7 +368,9 @@ class LusigninPlugin(Star):
         month: int,
         user_name: str,
         signed_dates: set[str],
+        makeup_dates: set[str] | None = None,
     ) -> str | None:
+        makeup_dates = makeup_dates or set()
         try:
             from PIL import Image, ImageDraw, ImageFont
         except ImportError:
@@ -231,6 +404,7 @@ class LusigninPlugin(Star):
             # 每次生成都从 PNG 文件读取日期背景图，方便用户替换自定义背景
             bg_normal = self._load_date_bg(DATE_BG_NORMAL_PATH, cell_w, cell_h)
             bg_signed = self._load_date_bg(DATE_BG_SIGNED_PATH, cell_w, cell_h)
+            bg_makeup = self._load_date_bg(DATE_BG_MAKEUP_PATH, cell_w, cell_h)
 
             # 标题：2026年8月  用户名
             title = f"{year}年{month}月  {user_name}"
@@ -259,7 +433,9 @@ class LusigninPlugin(Star):
                 cell_top = y - cell_h // 2
 
                 if date_str in signed_dates:
-                    if bg_signed is not None:
+                    if date_str in makeup_dates and bg_makeup is not None:
+                        img.paste(bg_makeup, (cell_left, cell_top), bg_makeup)
+                    elif bg_signed is not None:
                         img.paste(bg_signed, (cell_left, cell_top), bg_signed)
                     else:
                         # 兼容 PNG 缺失时的程序化兜底

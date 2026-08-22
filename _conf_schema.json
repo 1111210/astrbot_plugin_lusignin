@@ -16,5 +16,20 @@
     "description": "重复签到提示，支持 {{user}} 和 {{times}} 占位符",
     "type": "text",
     "default": "{{user}} 今天已经签过到啦（重复签到）！你本月已经签到 {{times}} 次。"
+  },
+  "makeup_success_message": {
+    "description": "补签成功提示，支持 {{user}}、{{date}}、{{times}} 占位符",
+    "type": "text",
+    "default": "{{user}} 补签成功！已补签 {{date}}。你本月已经签到 {{times}} 次。"
+  },
+  "makeup_duplicate_message": {
+    "description": "每天重复补签提示，支持 {{user}} 占位符",
+    "type": "text",
+    "default": "{{user}} 今天已经补签过了，不能重复补签。"
+  },
+  "makeup_fail_message": {
+    "description": "补签失败提示，支持 {{user}} 和 {{reason}} 占位符",
+    "type": "text",
+    "default": "{{user}} 补签失败：{{reason}}"
   }
 }
