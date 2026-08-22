@@ -26,6 +26,7 @@ from astrbot.api import logger
 PLUGIN_NAME = "astrbot_plugin_lusignin"
 
 BUNDLED_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DroidSansFallbackFull.ttf"
+BUNDLED_FALLBACK_FONT_PATH = Path(__file__).resolve().parent / "assets" / "FreeSans.otf"
 
 TZ_BEIJING = timezone(timedelta(hours=8))
 
@@ -202,10 +203,15 @@ class LusigninPlugin(Star):
             return None
 
         try:
-            font_path = self._find_cjk_font()
-            title_font = self._load_font(font_path, 40)
-            header_font = self._load_font(font_path, 30)
-            day_font = self._load_font(font_path, 30)
+            cjk_font_path = self._find_cjk_font()
+            fallback_font_path = str(BUNDLED_FALLBACK_FONT_PATH)
+
+            title_cjk_font = self._load_font(cjk_font_path, 40)
+            title_fallback_font = self._load_font(fallback_font_path, 40)
+            header_cjk_font = self._load_font(cjk_font_path, 30)
+            header_fallback_font = self._load_font(fallback_font_path, 30)
+            day_cjk_font = self._load_font(cjk_font_path, 30)
+            day_fallback_font = self._load_font(fallback_font_path, 30)
 
             margin = 36
             cell_w = 128
@@ -222,14 +228,14 @@ class LusigninPlugin(Star):
 
             # 标题：2026年8月  用户名
             title = f"{year}年{month}月  {user_name}"
-            self._draw_centered(draw, title, width // 2, margin + title_h // 2, title_font, (40, 40, 40))
+            self._draw_centered(draw, title, width // 2, margin + title_h // 2, title_cjk_font, title_fallback_font, (40, 40, 40))
 
             # 星期表头：日 一 二 三 四 五 六（周日开头）
             weekdays = ["日", "一", "二", "三", "四", "五", "六"]
             for col, weekday in enumerate(weekdays):
                 x = margin + col * cell_w + cell_w // 2
                 y = margin + title_h + header_h // 2
-                self._draw_centered(draw, weekday, x, y, header_font, (120, 120, 120))
+                self._draw_centered(draw, weekday, x, y, header_cjk_font, header_fallback_font, (120, 120, 120))
 
             first_weekday_monday0 = calendar.monthrange(year, month)[0]
             # 转换为周日起始的列：周一=1 ... 周六=6，周日=0
@@ -243,7 +249,7 @@ class LusigninPlugin(Star):
                 y = margin + title_h + header_h + row * cell_h + cell_h // 2
 
                 date_str = f"{year:04d}-{month:02d}-{day:02d}"
-                self._draw_centered(draw, str(day), x, y, day_font, (30, 30, 30))
+                self._draw_centered(draw, str(day), x, y, day_cjk_font, day_fallback_font, (30, 30, 30))
 
                 if date_str in signed_dates:
                     # 在日期右上侧画一个绿色对勾，不依赖字体是否包含 ✓ 字形
@@ -285,15 +291,83 @@ class LusigninPlugin(Star):
         return None
 
     @staticmethod
-    def _draw_centered(draw, text: str, cx: int, cy: int, font, fill):
+    def _draw_centered(draw, text: str, cx: int, cy: int, cjk_font, fallback_font, fill):
+        """居中绘制文本，并智能切换中文字体与 Unicode 回退字体。"""
+        runs = LusigninPlugin._split_font_runs(text, cjk_font, fallback_font)
+        total_w = 0.0
+        for run_text, run_font in runs:
+            try:
+                total_w += draw.textlength(run_text, font=run_font)
+            except AttributeError:
+                bbox = draw.textbbox((0, 0), run_text, font=run_font)
+                total_w += bbox[2] - bbox[0]
+
         try:
-            bbox = draw.textbbox((0, 0), text, font=font)
-            tw = bbox[2] - bbox[0]
-            th = bbox[3] - bbox[1]
-        except AttributeError:
-            tw = draw.textlength(text, font=font)
-            th = font.size
-        draw.text((cx - tw / 2, cy - th / 2), text, font=font, fill=fill)
+            font_size = max(getattr(cjk_font, "size", 12), getattr(fallback_font, "size", 12))
+        except Exception:
+            font_size = 12
+
+        x = cx - total_w / 2
+        y = cy - font_size / 2
+        for run_text, run_font in runs:
+            draw.text((x, y), run_text, font=run_font, fill=fill)
+            try:
+                x += draw.textlength(run_text, font=run_font)
+            except AttributeError:
+                bbox = draw.textbbox((0, 0), run_text, font=run_font)
+                x += bbox[2] - bbox[0]
+
+    @staticmethod
+    def _split_font_runs(text: str, cjk_font, fallback_font):
+        """将文本按中文字符和其他 Unicode 字符拆分成连续片段，分别使用 CJK/回退字体。"""
+        runs: list[tuple[str, object]] = []
+        current_chars: list[str] = []
+        current_font = None
+
+        for ch in text:
+            font = cjk_font if LusigninPlugin._is_cjk_char(ch) else fallback_font
+            if current_font is None:
+                current_font = font
+            if font is not current_font:
+                if current_chars:
+                    runs.append(("".join(current_chars), current_font))
+                current_chars = [ch]
+                current_font = font
+            else:
+                current_chars.append(ch)
+
+        if current_chars:
+            runs.append(("".join(current_chars), current_font))
+        return runs
+
+    @staticmethod
+    def _is_cjk_char(ch: str) -> bool:
+        cp = ord(ch)
+        return (
+            0x1100 <= cp <= 0x11FF
+            or 0x2E80 <= cp <= 0x2EFF
+            or 0x3000 <= cp <= 0x303F
+            or 0x3040 <= cp <= 0x30FF
+            or 0x3100 <= cp <= 0x312F
+            or 0x3130 <= cp <= 0x318F
+            or 0x31A0 <= cp <= 0x31BF
+            or 0x31C0 <= cp <= 0x31EF
+            or 0x3200 <= cp <= 0x32FF
+            or 0x3300 <= cp <= 0x33FF
+            or 0x3400 <= cp <= 0x4DBF
+            or 0x4E00 <= cp <= 0x9FFF
+            or 0xA000 <= cp <= 0xA48F
+            or 0xA490 <= cp <= 0xA4CF
+            or 0xAC00 <= cp <= 0xD7AF
+            or 0xF900 <= cp <= 0xFAFF
+            or 0xFE30 <= cp <= 0xFE4F
+            or 0xFF00 <= cp <= 0xFFEF
+            or 0x20000 <= cp <= 0x2A6DF
+            or 0x2A700 <= cp <= 0x2B73F
+            or 0x2B740 <= cp <= 0x2B81F
+            or 0x2B820 <= cp <= 0x2CEAF
+            or 0x2F800 <= cp <= 0x2FA1F
+        )
 
     @staticmethod
     def _draw_check(draw, x: int, y: int, size: int, fill):
