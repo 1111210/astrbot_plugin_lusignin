@@ -9,7 +9,6 @@ AstrBot 签到插件（Lusignin）
 from __future__ import annotations
 
 import calendar
-import glob
 import json
 import os
 import tempfile
@@ -25,6 +24,8 @@ from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 from astrbot.api import logger
 
 PLUGIN_NAME = "astrbot_plugin_lusignin"
+
+BUNDLED_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DroidSansFallbackFull.ttf"
 
 TZ_BEIJING = timezone(timedelta(hours=8))
 
@@ -271,97 +272,16 @@ class LusigninPlugin(Star):
             return ImageFont.load_default()
 
     def _find_cjk_font(self) -> str | None:
-        """查找一个支持中文/Unicode 的字体文件，并缓存结果。"""
+        """直接使用插件内置的中文字体，不依赖系统字体。"""
         if self._cjk_font_cache:
             return self._cjk_font_cache
 
-        path = self._search_cjk_font()
-        self._cjk_font_cache = path
-        return path
+        font_path = str(BUNDLED_FONT_PATH)
+        if os.path.exists(font_path):
+            self._cjk_font_cache = font_path
+            return font_path
 
-    def _search_cjk_font(self) -> str | None:
-        # 1) 常见固定路径
-        candidates = [
-            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-            "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
-            "/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc",
-            "/usr/share/fonts/truetype/arphic/uming.ttc",
-            "/usr/share/fonts/truetype/arphic/ukai.ttc",
-            "C:/Windows/Fonts/msyh.ttc",
-            "C:/Windows/Fonts/msyh.ttf",
-            "C:/Windows/Fonts/simhei.ttf",
-            "C:/Windows/Fonts/simsun.ttc",
-            "/System/Library/Fonts/PingFang.ttc",
-            "/System/Library/Fonts/STHeiti Light.ttc",
-            "/System/Library/Fonts/Hiragino Sans GB.ttc",
-        ]
-        for path in candidates:
-            if os.path.exists(path):
-                return path
-
-        # 2) Linux/macOS 使用 fontconfig 列出真正支持中文的字体
-        try:
-            import subprocess
-
-            for lang in ("zh-cn", "zh", "ja", "ko"):
-                try:
-                    proc = subprocess.run(
-                        ["fc-list", f":lang={lang}", "file"],
-                        capture_output=True,
-                        text=True,
-                        timeout=3,
-                        check=False,
-                    )
-                    for line in proc.stdout.splitlines():
-                        font_path = line.split(":", 1)[0].strip()
-                        if font_path and os.path.exists(font_path):
-                            return font_path
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        # 3) 使用 glob 扫描常见字体目录
-        patterns = []
-        if os.name == "nt":
-            fonts_dir = os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts")
-            patterns = [
-                os.path.join(fonts_dir, "msyh*"),
-                os.path.join(fonts_dir, "simhei*"),
-                os.path.join(fonts_dir, "simsun*"),
-                os.path.join(fonts_dir, "Deng*"),
-                os.path.join(fonts_dir, "NotoSans*"),
-                os.path.join(fonts_dir, "SourceHanSans*"),
-            ]
-        else:
-            patterns = [
-                "/usr/share/fonts/**/*CJK*",
-                "/usr/share/fonts/**/*cjk*",
-                "/usr/share/fonts/**/*wqy*",
-                "/usr/share/fonts/**/*WenQuanYi*",
-                "/usr/share/fonts/**/*NotoSans*",
-                "/usr/share/fonts/**/*DroidSansFallback*",
-                "/usr/share/fonts/**/*uming*",
-                "/usr/share/fonts/**/*ukai*",
-                "/System/Library/Fonts/**/*PingFang*",
-                "/System/Library/Fonts/**/*Hiragino*",
-                "/System/Library/Fonts/**/*STHeiti*",
-                "/Library/Fonts/**/*NotoSansCJK*",
-                "/Library/Fonts/**/*Arial Unicode*",
-            ]
-
-        for pattern in patterns:
-            try:
-                for font_path in glob.glob(pattern, recursive=True):
-                    if os.path.isfile(font_path):
-                        return font_path
-            except Exception:
-                continue
-
+        self._cjk_font_cache = None
         return None
 
     @staticmethod
