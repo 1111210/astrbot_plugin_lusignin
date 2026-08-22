@@ -21,6 +21,15 @@ AstrBot 签到插件，面向 aiocqhttp 对话场景。
 | `success_message` | 签到成功提示，支持 `{{user}}`、`{{times}}` |
 | `duplicate_message` | 重复签到提示，支持 `{{user}}`、`{{times}}` |
 
+## 自定义日期背景
+
+月历日期背景从以下 PNG 文件读取，每次生成图片时都会重新加载，可直接替换文件自定义：
+
+- `assets/date_bg_normal.png`：未签到日期背景，默认为透明
+- `assets/date_bg_signed.png`：已签到日期背景，默认带绿色对勾
+
+建议图片尺寸为 `120×84`，插件会自动缩放到日期格大小。
+
 ## 数据位置
 
 签到数据保存在 `data/plugin_data/astrbot_plugin_lusignin/signin_data.json`。

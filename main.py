@@ -27,6 +27,8 @@ PLUGIN_NAME = "astrbot_plugin_lusignin"
 
 BUNDLED_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DroidSansFallbackFull.ttf"
 BUNDLED_FALLBACK_FONT_PATH = Path(__file__).resolve().parent / "assets" / "FreeSans.otf"
+DATE_BG_NORMAL_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_normal.png"
+DATE_BG_SIGNED_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_signed.png"
 
 TZ_BEIJING = timezone(timedelta(hours=8))
 
@@ -226,6 +228,10 @@ class LusigninPlugin(Star):
             img = Image.new("RGB", (width, height), "white")
             draw = ImageDraw.Draw(img)
 
+            # 每次生成都从 PNG 文件读取日期背景图，方便用户替换自定义背景
+            bg_normal = self._load_date_bg(DATE_BG_NORMAL_PATH, cell_w, cell_h)
+            bg_signed = self._load_date_bg(DATE_BG_SIGNED_PATH, cell_w, cell_h)
+
             # 标题：2026年8月  用户名
             title = f"{year}年{month}月  {user_name}"
             self._draw_centered(draw, title, width // 2, margin + title_h // 2, title_cjk_font, title_fallback_font, (40, 40, 40))
@@ -249,24 +255,33 @@ class LusigninPlugin(Star):
                 y = margin + title_h + header_h + row * cell_h + cell_h // 2
 
                 date_str = f"{year:04d}-{month:02d}-{day:02d}"
+                cell_left = x - cell_w // 2
+                cell_top = y - cell_h // 2
+
                 if date_str in signed_dates:
-                    # 已签到：用浅绿色背景 + 大对勾作为日期背景
-                    draw.rectangle(
-                        [
-                            x - cell_w // 2 + 6,
-                            y - cell_h // 2 + 6,
-                            x + cell_w // 2 - 6,
-                            y + cell_h // 2 - 6,
-                        ],
-                        fill=(232, 247, 232),
-                    )
-                    self._draw_check_background(
-                        draw,
-                        x,
-                        y,
-                        min(cell_w, cell_h) * 0.66,
-                        (120, 200, 120),
-                    )
+                    if bg_signed is not None:
+                        img.paste(bg_signed, (cell_left, cell_top), bg_signed)
+                    else:
+                        # 兼容 PNG 缺失时的程序化兜底
+                        draw.rectangle(
+                            [
+                                cell_left + 6,
+                                cell_top + 6,
+                                cell_left + cell_w - 6,
+                                cell_top + cell_h - 6,
+                            ],
+                            fill=(232, 247, 232),
+                        )
+                        self._draw_check_background(
+                            draw,
+                            x,
+                            y,
+                            min(cell_w, cell_h) * 0.66,
+                            (120, 200, 120),
+                        )
+                else:
+                    if bg_normal is not None:
+                        img.paste(bg_normal, (cell_left, cell_top), bg_normal)
 
                 self._draw_centered(draw, str(day), x, y, day_cjk_font, day_fallback_font, (30, 30, 30))
 
@@ -277,6 +292,21 @@ class LusigninPlugin(Star):
             return image_path
         except Exception as e:
             logger.error(f"[{PLUGIN_NAME}] 生成月历图片失败: {e}")
+            return None
+
+    def _load_date_bg(self, path, cell_w: int, cell_h: int):
+        """读取日期背景 PNG。每次生成月历都会重新读取，支持用户直接替换图片。"""
+        try:
+            from PIL import Image
+
+            if not os.path.exists(path):
+                return None
+            bg = Image.open(path).convert("RGBA")
+            if bg.size != (cell_w, cell_h):
+                bg = bg.resize((cell_w, cell_h), Image.LANCZOS)
+            return bg
+        except Exception as e:
+            logger.warning(f"[{PLUGIN_NAME}] 读取日期背景图失败 {path}: {e}")
             return None
 
     def _load_font(self, font_path: str | None, size: int):
