@@ -15,7 +15,7 @@ AstrBot 签到插件，面向 aiocqhttp 对话场景。
   - 只能补签本月已达到且未签到的日期。
 - 未命中关键词时不拦截事件，AstrBot 默认逻辑照常接管。
 - 命中关键词后由插件完成回复并终止本次事件继续传播，避免默认 LLM 或其他插件重复回复。
-- 内置 Droid Sans Fallback 中文字体与 DejaVu Sans Unicode 回退字体，月历图片不依赖系统字体环境。
+- 内置 Droid Sans Fallback 中文字体与 DejaVu Sans Bold Unicode 回退字体，月历图片不依赖系统字体环境。
 
 ## 配置
 
@@ -42,7 +42,7 @@ AstrBot 签到插件，面向 aiocqhttp 对话场景。
 
 - 项目代码：AGPL-3.0
 - `DroidSansFallbackFull.ttf`：Apache License 2.0
-- `DejaVuSans.ttf`：Bitstream Vera License（宽松许可）
+- `DejaVuSans.ttf` / `DejaVuSans-Bold.ttf`：Bitstream Vera License（宽松许可）
 - 日期背景 PNG：本插件原创资源
 
 以上字体许可文件分别保存在 `assets/LICENSE-DroidSansFallback.txt` 和 `assets/LICENSE-DejaVu.txt`。

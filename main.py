@@ -28,6 +28,7 @@ PLUGIN_NAME = "astrbot_plugin_lusignin"
 
 BUNDLED_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DroidSansFallbackFull.ttf"
 BUNDLED_FALLBACK_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DejaVuSans.ttf"
+BUNDLED_FALLBACK_BOLD_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DejaVuSans-Bold.ttf"
 DATE_BG_NORMAL_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_normal.png"
 DATE_BG_SIGNED_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_signed.png"
 DATE_BG_MAKEUP_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_makeup.png"
@@ -379,20 +380,20 @@ class LusigninPlugin(Star):
 
         try:
             cjk_font_path = self._find_cjk_font()
-            fallback_font_path = str(BUNDLED_FALLBACK_FONT_PATH)
+            fallback_font_path = str(BUNDLED_FALLBACK_BOLD_FONT_PATH)
 
-            title_cjk_font = self._load_font(cjk_font_path, 52)
-            title_fallback_font = self._load_font(fallback_font_path, 52)
-            header_cjk_font = self._load_font(cjk_font_path, 40)
-            header_fallback_font = self._load_font(fallback_font_path, 40)
-            day_cjk_font = self._load_font(cjk_font_path, 44)
-            day_fallback_font = self._load_font(fallback_font_path, 44)
+            title_cjk_font = self._load_font(cjk_font_path, 58)
+            title_fallback_font = self._load_font(fallback_font_path, 58)
+            header_cjk_font = self._load_font(cjk_font_path, 44)
+            header_fallback_font = self._load_font(fallback_font_path, 44)
+            day_cjk_font = self._load_font(cjk_font_path, 50)
+            day_fallback_font = self._load_font(fallback_font_path, 50)
 
-            margin = 24
+            margin = 16
             cell_w = 120
-            cell_h = 84
-            title_h = 96
-            header_h = 66
+            cell_h = 78
+            title_h = 88
+            header_h = 56
             max_weeks = 6
 
             width = margin * 2 + cell_w * 7
@@ -531,7 +532,14 @@ class LusigninPlugin(Star):
         x = cx - total_w / 2
         y = cy - font_size / 2
         for run_text, run_font in runs:
-            draw.text((x, y), run_text, font=run_font, fill=fill)
+            draw.text(
+                (x, y),
+                run_text,
+                font=run_font,
+                fill=fill,
+                stroke_width=2,
+                stroke_fill=fill,
+            )
             try:
                 x += draw.textlength(run_text, font=run_font)
             except AttributeError:
