@@ -1,9 +1,9 @@
-name: astrbot_plugin_lusignin
-display_name: Lusignin 签到
-desc: 检测关键词自动签到，生成当月月历图片并反馈签到次数。
-version: v1.0.0
-author: 1111210
-repo: https://github.com/1111210/astrbot_plugin_lusignin.git
+name: "astrbot_plugin_lusignin"
+display_name: "Lusignin 签到"
+desc: "检测关键词自动签到，生成当月月历图片并反馈签到次数。"
+version: "1.0.0"
+author: "1111210"
+repo: "https://github.com/1111210/astrbot_plugin_lusignin.git"
 astrbot_version: ">=4.16"
 support_platforms:
-  - aiocqhttp
+  - "aiocqhttp"
