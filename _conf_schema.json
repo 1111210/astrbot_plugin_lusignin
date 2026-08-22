@@ -1,0 +1,20 @@
+{
+  "keywords": {
+    "description": "触发签到的关键词，消息中包含任意一个即触发签到",
+    "type": "list",
+    "items": {
+      "type": "string"
+    },
+    "default": ["签到", "打卡"]
+  },
+  "success_message": {
+    "description": "签到成功提示，支持 {{user}} 和 {{times}} 占位符",
+    "type": "text",
+    "default": "{{user}} 签到成功！你本月已经签到 {{times}} 次。"
+  },
+  "duplicate_message": {
+    "description": "重复签到提示，支持 {{user}} 和 {{times}} 占位符",
+    "type": "text",
+    "default": "{{user}} 今天已经签过到啦（重复签到）！你本月已经签到 {{times}} 次。"
+  }
+}
