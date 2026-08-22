@@ -5,7 +5,10 @@
     "items": {
       "type": "string"
     },
-    "default": ["签到", "打卡"]
+    "default": [
+      "签到",
+      "打卡"
+    ]
   },
   "success_message": {
     "description": "签到成功提示，支持 {{user}} 和 {{times}} 占位符",
@@ -31,5 +34,10 @@
     "description": "补签失败提示，支持 {{user}} 和 {{reason}} 占位符",
     "type": "text",
     "default": "{{user}} 补签失败：{{reason}}"
+  },
+  "use_bold_font": {
+    "description": "是否使用 DejaVu Sans Bold 粗体字体作为非中文字体",
+    "type": "bool",
+    "default": false
   }
 }

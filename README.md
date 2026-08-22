@@ -27,6 +27,7 @@ AstrBot 签到插件，面向 aiocqhttp 对话场景。
 | `makeup_success_message` | 补签成功提示，支持 `{{user}}`、`{{date}}`、`{{times}}` |
 | `makeup_duplicate_message` | 每天重复补签提示，支持 `{{user}}` |
 | `makeup_fail_message` | 补签失败提示，支持 `{{user}}`、`{{reason}}` |
+| `use_bold_font` | 是否使用 DejaVu Sans Bold 粗体字体，默认关闭 |
 
 ## 自定义日期背景
 
@@ -36,7 +37,7 @@ AstrBot 签到插件，面向 aiocqhttp 对话场景。
 - `assets/date_bg_signed.png`：已签到日期背景，默认带绿色对勾
 - `assets/date_bg_makeup.png`：补签日期背景，默认与正常签到背景一致
 
-建议图片尺寸为 `120×84`，插件会自动缩放到日期格大小。
+建议图片尺寸为 `240×156`（2 倍分辨率），插件会自动缩放到日期格大小。
 
 ## 开源许可
 
