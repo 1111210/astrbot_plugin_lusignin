@@ -27,7 +27,7 @@ from astrbot.api import logger
 PLUGIN_NAME = "astrbot_plugin_lusignin"
 
 BUNDLED_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DroidSansFallbackFull.ttf"
-BUNDLED_FALLBACK_FONT_PATH = Path(__file__).resolve().parent / "assets" / "FreeSans.otf"
+BUNDLED_FALLBACK_FONT_PATH = Path(__file__).resolve().parent / "assets" / "DejaVuSans.ttf"
 DATE_BG_NORMAL_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_normal.png"
 DATE_BG_SIGNED_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_signed.png"
 DATE_BG_MAKEUP_PATH = Path(__file__).resolve().parent / "assets" / "date_bg_makeup.png"
